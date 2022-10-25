@@ -1,0 +1,98 @@
+{
+  "task": {
+    "fields": ["id", "name", "definition_text"],
+    "relations": {
+      "HASCONDITION": "condition",
+      "ASSERTS": "concept",
+      "HASINDICATOR": "indicator",
+      "HASEXTERNALDATASET": "external_dataset",
+      "HASIMPLEMENTATION": "implementation",
+      "HASCITATION": "citation",
+      "HASCONTRAST": "contrast",
+      "INBATTERY": "battery"
+    }
+  },
+  "concept": {
+    "fields": ["id", "name", "definition_text", "alias"],
+    "relations": {
+      "PARTOF": "concept",
+      "KINDOF": "concept",
+      "MEASUREDBY": "contrast",
+      "HASCITATION": "citation"
+    }
+  },
+  "indicator": {
+    "fields": ["id", "name", "description", "type"],
+    "relations": {}
+  },
+  "external_dataset": {
+    "fields": ["id", "uri", "dataset_name"],
+    "relations": {}
+  },
+  "condition": {
+    "fields": ["id", "name", "description"],
+    "relations": {"HASCONTRAST": "contrast"}
+  },
+  "contrast": {
+    "fields": ["id", "name", "description"],
+    "relations": {"HASDIFFERENCE": "disorder"}
+  },
+  "citation": {
+    "default": "citation_url",
+    "fields": ["citation_url", "citation_comment", "citation_desc",
+      "citation_authors", "citation_type", "citation_pubname",
+      "citation_pubdate", "citation_pmid", "citation_source",
+      "id", "name"],
+    "relations": {}
+  },
+  "implementation": {
+    "fields": ["id", "uri", "name", "descriptions"],
+    "relations": {}
+  },
+  "theory": {
+    "fields": ["id", "name", "collection_description"],
+    "relations": {"HASCITATION": "citation"}
+  },
+  "battery": {
+    "fields": ["id", "name", "collection", "collection_description"],
+    "relations": {
+      "HASCITATION": "citation",
+      "HASINDICATOR": "indicator",
+      "INBATTERY": "task"
+    }
+  },
+  "disorder": {
+    "fields": ["id", "name", "classification", "definition", "event_stamp", "id_user", "is_a", "id_protocol", "is_a_fulltext", "is_a_protocol"],
+    "relations": {
+      "ISA": "disorder",
+      "HASCITATION": "citation",
+      "HASLINK": "external_link"
+    }
+  },
+  "trait": {
+    "fields": ["id", "name", "definition", "event_stamp", "id_user"],
+    "relations": {
+      "HASCITATION": "citation",
+      "HASLINK": "external_link",
+      "MEASUREDBY": "contrast"
+    }
+  },
+  "behavior": {
+    "fields": ["id", "name", "definition"],
+    "relations": {
+      "HASCITATION": "citation",
+      "HASLINK": "external_link",
+      "MEASUREDBY": "contrast"
+    }
+  },
+  "assertion": {
+    "fields": ["id", "name", "event_stamp", "truth_value", "id_subject_def", "user_id", "flag_for_curator", "confidence_level"],
+    "relations": {
+      "PREDICATE": "tasks",
+      "SUBJECT": "concepts",
+      "PREDICATE_DEF": "contrasts",
+      "INTHEORY": "theories",
+      "HASCITATION": "citations"
+    }
+  }
+}

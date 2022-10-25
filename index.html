@@ -1,0 +1,535 @@
+<html>
+<script type="text/javascript" charset="utf8" src="https://code.jquery.com/jquery-3.5.1.js"></script>
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.11.3/css/jquery.dataTables.css">
+<script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.11.3/js/jquery.dataTables.js"></script>
+
+<style type="text/css">
+  select {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  input, textarea {
+    width: 100%;
+    border-radius: 4px;
+    border: 1px solid #aaa;
+    min-height: 32px;
+    padding-bottom: 5px;
+    padding-right: 5px;
+    position: relative;
+  }
+
+  textarea {
+    height: 15em;
+  }
+
+  body{
+    margin:40px auto;
+    line-height: 1.6;
+    font-size: 18px;
+    color: #444;
+    padding: 0 10px;
+  }
+
+  form {
+    border: 1px solid #aaa;
+    padding:1em;
+  }
+
+  h1,h2,h3{line-height:1.2;}
+
+  #main-container {
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  #node-table td {
+    white-space: normal;
+  }
+
+  #pr-container {
+    margin: 40px;
+  }
+  
+  #form-container:empty::after { 
+    content: "Please select node from list tab.";
+  }
+
+  .add-new-btn {
+    margin: 0 20px;
+  }
+
+  table.dataTable.hover tbody tr:hover,
+  table.dataTable.display tbody tr:hover {
+    background-color: #34ebe5;
+  }
+
+  .tabs {
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  .radiotab {
+    display: none;
+  }
+
+  .label {
+    order: 1;
+    flex-grow: 1;
+    border-width: 1px;
+    border-style: solid;
+    border-color: black;
+    padding: .25em;
+  }
+
+  .radiotab ~ .panel {
+    display: none;
+  }
+
+  .radiotab:checked + .label + .panel {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    order: 2;
+  }
+
+  .radiotab:checked + .label {
+    background-color: #f1f1f1
+  }
+
+  #node-nav-container {
+    display: flex;
+    flex-direction: row;
+  }
+
+  #node-nav-container button {
+    flex-grow: 1;
+    flex: auto;
+  }
+
+</style>
+
+<script type=module>
+  const field_lookup = {
+    "definition_text": {
+      "display": "definition",
+      "elem": "textarea"
+    },
+    "collection_description": {
+      "display": "definition",
+      "elem": "textarea"
+    },
+    "ASSERTS": { "display": "asserts" },
+    "CLASSIFIEDUNDER": { "display": "classified under" },
+    "HASCITATION": { "display": "has citation" },
+    "HASCONDITION": { "display": "has condition" },
+    "HASCONTRAST": { "display": "has contrast" },
+    "HASDIFFERENCE": { "display": "has difference" },
+    "HASEXTERNALDATASET": { "display": "has external dataset" },
+    "HASIMPLEMENTATION": { "display": "has implementation" },
+    "HASINDICATOR": { "display": "has indicator" },
+    "HASLINK": { "display": "has link" },
+    "INBATTERY": { "display": "in battery" },
+    "ISA": { "display": "is a" },
+    "KINDOF": { "display": "kind of" },
+    "MEASUREDBY": { "display": "measured by" },
+    "PARTOF": { "display": "part of" }
+  }
+ 
+  const pr_files = {}
+  const new_nodes = {}
+  let TOKEN = ""
+
+  import { Octokit } from "https://cdn.pika.dev/@octokit/core";
+  import { createPullRequest } from "https://cdn.pika.dev/octokit-plugin-create-pull-request";
+  console.log(Octokit);
+  function PR(data) {
+    const MyOctokit = Octokit.plugin(createPullRequest);
+    const octokit = new MyOctokit({
+      auth: data.token,
+    });
+
+    octokit
+      .createPullRequest({
+        owner: "rwblair",
+        repo: "cognitive_atlas_json",
+        title: data.title,
+        body: data.body,
+        head: data.branch_name,
+        changes: [
+          {
+            files: data.files,
+            commit: "should make a nice automated commit msg"
+          },
+        ],
+      })
+      .then((pr) => {
+        console.log(pr)
+	alert(pr.data._links.html.href)
+        return pr.data._links.html
+      })
+      .catch((err) => {
+        console.log(err);
+      })
+  }
+
+  function make_pr(event) {
+    event.preventDefault()
+    console.log(event.target)
+    const data = formDataSerialize(new FormData(event.target))
+    data.files = pr_files
+    const pr_url = PR(data)
+  }
+
+  async function load_json(filename) {
+    return fetch(`./${filename}`)
+      .then(response => response.json())
+  }
+
+  /* The contents of all the cognitive atlas terms */
+  let nodes = await load_json("all_nodes_by_type.json");
+
+  /* Describes the different kinds of terms in cognitive atlas and how they can relate.
+   * This is also used to determine which properties we add as fields to forms on the site.
+   */
+  let node_types = await load_json("nodes.json");
+  
+  
+  /* https://gomakethings.com/how-to-serialize-form-data-with-vanilla-js/ */
+  function formDataSerialize(data) {
+    let obj = {};
+    for (let [key, value] of data) {
+     if (obj[key] !== undefined) {
+       if (!Array.isArray(obj[key])) {
+         obj[key] = [obj[key]];
+        }
+        obj[key].push(value);
+      } else {
+        obj[key] = value;
+      }
+    }
+    return obj;
+  }
+
+  function update_node(data) {
+    const { node, type } = get_node(data.id)
+    if (node === null) {
+      node = {properties: {}}
+    }
+    const node_type = node_types[type]
+    const keys = Object.keys(data)
+    keys.map(key => {
+      if (node_type.fields.includes(key)) {
+        node.properties[key] = data[key]
+      } else if (key in node_type.relations) {
+        if (!Array.isArray(data[key])) {
+          data[key] = [data[key]]
+        }
+        if (node.relations === undefined) {
+          node.relations = {}
+        }
+        node.relations[key] = data[key].map(x => { return {id: x}})
+      }
+    })
+    console.log(JSON.stringify(node))
+    const file_name = `${type}/${node.properties.id}.json`
+    if (!pr_files[file_name]) {
+      document.querySelector('#file-list').appendChild(create_element("li", {"textContent": file_name}))
+    }
+    pr_files[file_name] = JSON.stringify(node)
+  }
+
+  /* we're inserting new nodes into list of existing nodes before their form is complete,
+   * we should remove these nodes if the form is cancelled
+   */
+  function add_new(type) {
+    // place holder for generating IDs
+    const new_id = Math.floor(Math.random() * 100000);
+    const new_node = {"properties": {"id": new_id}}
+    nodes[type][new_id] = new_node
+    const new_form = create_form(new_id)
+    const container = document.querySelector('#detail-container');
+    container.appendChild(new_form)
+    $(".select2-nodes").select2({ width: '100%' })
+    new_nodes[new_id] = new_node
+  }
+
+  function form_submit(event) {
+    event.preventDefault();
+    const data = formDataSerialize(new FormData(event.target));
+    update_node(data) 
+    /* if we want newly submitted nodes to show up in existing forms selects... */
+    $(".select2-nodes").select2()
+    event.target.remove()
+  }
+
+  /* node type is also encoded in the node itself under 'labels' array, this is a byproduct of old graphdb. */
+  function get_node(id) {
+    for (const type in nodes) {
+      if (id in nodes[type]) {
+        return {"node": nodes[type][id], "type": type};
+      }
+    }
+    return {"node": null, "type": null};
+  }
+
+  /* most nodes have a name field that is filled out, but citations don't so we can't rely on name */
+  function get_default_display_field(node_type) {
+    return node_types[node_type].default ? node_types[node_type].default : 'name'
+  }
+
+  function create_display(id) {
+    const detailContainer = create_element("div", {})
+
+    let {node, type} = get_node(id)
+    const fields = node_types[type].fields;
+
+    fields.map(field => {
+      const template = document.querySelector('#field-template').content.cloneNode(true);
+      template.querySelector('h2').textContent = field
+      template.querySelector('p').textContent = node.properties[field]
+      detailContainer.appendChild(template)
+    })
+
+    const relations = node_types[type].relations;
+    for (const relation in relations) {
+      if (!(relation in node)) {
+        continue;
+      }
+      const template = document.querySelector('#relation-template').content.cloneNode(true);
+
+      const rel_type = relations[relation]
+      const related_nodes = node[relation]
+      template.querySelector('h2').textContent = rel_type
+      const list_template = template.querySelector('ul')
+      const display_field = get_default_display_field(rel_type)
+
+      related_nodes.map(elem => {
+        let related_node = get_node(elem.id)
+        if (related_node.type == null) {
+          return
+        }
+        const related_type = related_node.type
+        related_node = related_node.node
+        related_node = related_node['properties']
+        const list_item = document.createElement('li')
+        list_item.textContent = related_node[display_field]
+        list_item.addEventListener("click", () => view_node(related_node.id))
+        list_template.appendChild(list_item)
+      })
+      detailContainer.appendChild(template)
+    }
+    return detailContainer
+  }
+
+  /* Cute way to avoid multiple calls to setAttribute after createElement call */
+  function create_element(elem, attrs) {
+    return Object.assign(document.createElement(elem), attrs)
+  }
+
+  function create_form(id) {
+    const form = create_element("form", {"id": `${id}-form`})
+    form.onsubmit = form_submit
+    const { node, type } = get_node(id);
+
+    const fields = node_types[type].fields;
+    form.appendChild(create_element("input", {"type": "hidden", "value": type, "name": "type"}))
+    fields.map(field => {
+      let input_elem = "input"
+      let input_attrs = {"type": "text", "name": field, "value": node.properties[field], "className": `${field}-input`}
+      if (field_lookup[field] && field_lookup[field].elem) {
+        input_elem = field_lookup[field].elem
+        input_attrs = {"name": field, "value": node.properties[field], "className": `${field}-input`}
+      }
+      const label = create_element('label', {"textContent": field, "for": field})
+      const input = create_element(input_elem, input_attrs)
+      form.appendChild(label)
+      form.appendChild(document.createElement("br"))
+      form.appendChild(input)
+      form.appendChild(document.createElement("br"))
+    })
+ 
+    const relations = node_types[type].relations;
+    for (const relation in relations) {
+      const rel_type = relations[relation]
+      const related_nodes = node[relation] ? node[relation].map(x => x.id) : []
+
+      /* these are the options for setting nodes as targets of our 
+       * relationships. We might not always want to use 'name' as the display 
+       * string here. (add default field to nodes.json)
+       */
+      const select_id = `${id}-${rel_type}-${relation}-select`
+      const select_element = create_element(
+        "select",
+        {"id": select_id, "className": "select2-nodes", "name": relation, "multiple": "multiple"}
+      )
+      const display_field = get_default_display_field(rel_type)
+      for (const [id, elem] of Object.entries(nodes[rel_type])) {
+        const selected = Boolean(related_nodes.filter(y => y === id).length)
+        const option = create_element('option', {'id': id, 'value': id, "innerText": elem.properties[display_field]})
+        if (selected) { option.setAttribute('selected', selected) }
+        select_element.appendChild(option)
+      }
+
+      let label_text = field_lookup[relation]['display'] 
+      const label = create_element('label', {"textContent": label_text, "for": select_id, "class": "select-label"})
+      const button = create_element('button', {"textContent": "Add", "className": "add-new-btn"})
+      button.onclick = (event) => {event.preventDefault(); add_new(rel_type);} 
+      form.appendChild(label)
+      form.appendChild(button)
+      form.appendChild(document.createElement("br"))
+      form.appendChild(select_element)
+      form.appendChild(document.createElement("br"))
+    }
+
+    form.appendChild(create_element("button", {"type": "submit", "textContent": "Submit", "className": "add-new-btn"}))
+    const cancel_button = create_element("button", {"type": "button", "textContent": "Cancel", "className": "add-new-btn"})
+    cancel_button.onclick = (event) => {event.preventDefault(); form.remove();}
+    form.appendChild(cancel_button)
+    return form
+  }
+  
+  function edit_node(id, containerSelector='#form-container') {
+    display_node(id, containerSelector, true)
+  }
+
+  function view_node(id, containerSelector='#form-container') {
+    display_node(id, containerSelector, false)
+  }
+
+  function display_node(id, containerSelector, edit) {
+    document.getElementById('t2').checked = true;
+    const container = document.querySelector(containerSelector);
+    container.innerHTML = '';
+    if (edit) {
+      const form = create_form(id)
+      container.appendChild(form)
+      $(".select2-nodes").select2({ width: '100%' })
+    } else {
+      const display = create_display(id)
+      container.appendChild(display)
+    }
+  }
+
+  function change_table_type(type) {
+    const containerRef = document.getElementById('table-container');
+    containerRef.innerHTML = '';
+    const template = document.querySelector('#table-template').content.cloneNode(true);
+    const tableRef = template.querySelector('table')
+    tableRef.setAttribute("id", "node-table")
+    containerRef.appendChild(tableRef)
+    const tbodyRef = tableRef.querySelector('tbody')
+    for (let node in nodes[type]) {
+      const newRow = tbodyRef.insertRow()
+      newRow.innerHTML = task_template(nodes[type][node].properties)
+      newRow.addEventListener("click", () => {
+        window.location = `#${nodes[type][node].properties.id}`
+        // view_node(nodes[type][node].properties.id)
+      })
+    }
+    new DataTable('#table-container table')
+  }
+
+  function hash_navigation(event) {
+    if (!!location.hash) {
+      const id = location.hash.split('#')[1]
+      view_node(id)
+    }
+  }
+
+  // do we like this more than cloning template tags?
+  function task_template(context) {
+    return `<td>${context.name}</td><td>${context.definition_text}</td>`
+  }
+
+  function list_navigation_init() {
+    const nav = document.getElementById('node-nav-container');
+    for (let key in node_types) {
+      const id = `change-to-${key}`
+      const button = create_element('button', {'id': id})
+      button.innerText = key
+      nav.appendChild(button)
+      document.getElementById(id).addEventListener("click", () => change_table_type(key))
+    }
+  }
+
+  function page_init() {
+    change_table_type('task')
+    list_navigation_init()
+    document.querySelector('#make-pr-btn').addEventListener("click", () => change_table_type('concept'))
+    document.querySelector('#pr-form').addEventListener("submit", make_pr)
+    window.addEventListener('hashchange', hash_navigation)
+    hash_navigation(undefined)
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener('DOMContentLoaded', page_init);
+  } else {
+    page_init();
+  }
+</script>
+
+<template id="field-template">
+  <h2></h2>
+  <p></p>
+</template>
+
+<template id="relation-template">
+  <h2></h2>
+  <ul></ul>
+</template>
+
+<template id="table-template">
+  <table class="hover">
+    <thead>
+      <tr><th>Name</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+    </tbody>
+  </table>
+</template>
+
+<body>
+  <div>
+  <h1>Cognitive Atlas</h1>
+
+  <div id="main-container">
+    <input class="radiotab" type="radio" name="tg1" id="t1" checked="checked">
+    <label class="label" for="t1">List</label>
+    <div id="browser-container" class="panel">
+      <div id="node-nav-container">
+      </div>
+      <div id="table-container">
+      </div>
+    </div>
+    <input class="radiotab" type="radio" name="tg1" id="t2">
+    <label class="label" for="t2">Details</label>
+    <div id="detail-container" class="panel">
+      <div id="form-container"></div>
+    </div>
+    <input class="radiotab" type="radio" name="tg1" id="t3">
+    <label class="label" for="t3">Pull Request</label>
+    <div id="pr-container" class="panel">
+      <form action="" id="pr-form">
+        <label> PR Title: 
+        <input type="text" name="title"/>
+        </label>
+        <label> PR Comment: 
+        <input type="text" name="body"/>
+        </label>
+        <label>
+        Name of branch to be created and merged: 
+        <input type="text" name="branch_name"/>
+        </label>
+        <label for="token">GH Token:</label>
+        <input type="password" name="token" minlength="8" required>
+        <h3>Files to commit:</h3>
+        <ul id="file-list">
+        </ul>
+        <button type="submit" id="make-pr-btn">Make PR</button>
+      </form>
+    </div>
+  </div>
+</body>
